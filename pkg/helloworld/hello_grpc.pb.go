@@ -23,6 +23,7 @@ const _ = grpc.SupportPackageIsVersion7
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type HelloServiceClient interface {
 	SayHello(ctx context.Context, in *HelloRequest, opts ...grpc.CallOption) (*HelloResponse, error)
+	Download(ctx context.Context, in *DownloadRequest, opts ...grpc.CallOption) (HelloService_DownloadClient, error)
 }
 
 type helloServiceClient struct {
@@ -42,11 +43,44 @@ func (c *helloServiceClient) SayHello(ctx context.Context, in *HelloRequest, opt
 	return out, nil
 }
 
+func (c *helloServiceClient) Download(ctx context.Context, in *DownloadRequest, opts ...grpc.CallOption) (HelloService_DownloadClient, error) {
+	stream, err := c.cc.NewStream(ctx, &HelloService_ServiceDesc.Streams[0], "/helloworld.HelloService/Download", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &helloServiceDownloadClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type HelloService_DownloadClient interface {
+	Recv() (*DownloadResponse, error)
+	grpc.ClientStream
+}
+
+type helloServiceDownloadClient struct {
+	grpc.ClientStream
+}
+
+func (x *helloServiceDownloadClient) Recv() (*DownloadResponse, error) {
+	m := new(DownloadResponse)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 // HelloServiceServer is the server API for HelloService service.
 // All implementations must embed UnimplementedHelloServiceServer
 // for forward compatibility
 type HelloServiceServer interface {
 	SayHello(context.Context, *HelloRequest) (*HelloResponse, error)
+	Download(*DownloadRequest, HelloService_DownloadServer) error
 	mustEmbedUnimplementedHelloServiceServer()
 }
 
@@ -56,6 +90,9 @@ type UnimplementedHelloServiceServer struct {
 
 func (UnimplementedHelloServiceServer) SayHello(context.Context, *HelloRequest) (*HelloResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SayHello not implemented")
+}
+func (UnimplementedHelloServiceServer) Download(*DownloadRequest, HelloService_DownloadServer) error {
+	return status.Errorf(codes.Unimplemented, "method Download not implemented")
 }
 func (UnimplementedHelloServiceServer) mustEmbedUnimplementedHelloServiceServer() {}
 
@@ -88,6 +125,27 @@ func _HelloService_SayHello_Handler(srv interface{}, ctx context.Context, dec fu
 	return interceptor(ctx, in, info, handler)
 }
 
+func _HelloService_Download_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(DownloadRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(HelloServiceServer).Download(m, &helloServiceDownloadServer{stream})
+}
+
+type HelloService_DownloadServer interface {
+	Send(*DownloadResponse) error
+	grpc.ServerStream
+}
+
+type helloServiceDownloadServer struct {
+	grpc.ServerStream
+}
+
+func (x *helloServiceDownloadServer) Send(m *DownloadResponse) error {
+	return x.ServerStream.SendMsg(m)
+}
+
 // HelloService_ServiceDesc is the grpc.ServiceDesc for HelloService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -100,6 +158,12 @@ var HelloService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _HelloService_SayHello_Handler,
 		},
 	},
-	Streams:  []grpc.StreamDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "Download",
+			Handler:       _HelloService_Download_Handler,
+			ServerStreams: true,
+		},
+	},
 	Metadata: "hello.proto",
 }

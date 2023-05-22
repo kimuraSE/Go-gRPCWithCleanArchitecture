@@ -6,6 +6,7 @@ option go_package = "./helloworld";
 
 service HelloService {
   rpc SayHello (HelloRequest) returns (HelloResponse);
+  rpc Download (DownloadRequest) returns (stream DownloadResponse);
 }
 
 message HelloRequest {
@@ -15,3 +16,12 @@ message HelloRequest {
 message HelloResponse {
   string message = 1;
 }
+
+message DownloadRequest {
+  string filename = 1;
+}
+
+message DownloadResponse {
+  bytes data = 1;
+}
+
